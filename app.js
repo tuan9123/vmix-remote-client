@@ -26,17 +26,21 @@ const app = createApp({
     const DEFAULT_VERCEL_DOMAIN = 'https://tuan-vmix-client.vercel.app';
     const DEFAULT_GITHUB_USERNAME = 'tuan9123';
 
-    // Tự động nạp cấu hình nếu chưa được lưu trữ
-    if (!localStorage.getItem('vmix_github_token')) {
+    // Tự động nạp đè cấu hình nếu chưa có hoặc đang chứa giá trị mẫu/rỗng
+    const storedToken = localStorage.getItem('vmix_github_token');
+    if (!storedToken || storedToken.trim() === '' || storedToken.includes('ghp_xxxx') || storedToken.includes('ghp_xxxxxxxxxxxxxxxxxxxx')) {
       localStorage.setItem('vmix_github_token', DEFAULT_GITHUB_TOKEN);
     }
-    if (!localStorage.getItem('vmix_github_gist_id')) {
+    const storedGist = localStorage.getItem('vmix_github_gist_id');
+    if (!storedGist || storedGist.trim() === '' || storedGist.includes('xxxx') || storedGist.includes('xxxxxxxxxxxxxxxxxxxx')) {
       localStorage.setItem('vmix_github_gist_id', DEFAULT_GIST_ID);
     }
-    if (!localStorage.getItem('vmix_custom_deploy_domain')) {
+    const storedDomain = localStorage.getItem('vmix_custom_deploy_domain');
+    if (!storedDomain || storedDomain.trim() === '' || storedDomain.includes('xxxx') || storedDomain.includes('vercel.app') && storedDomain.includes('xxxx')) {
       localStorage.setItem('vmix_custom_deploy_domain', DEFAULT_VERCEL_DOMAIN);
     }
-    if (!localStorage.getItem('vmix_github_username')) {
+    const storedUser = localStorage.getItem('vmix_github_username');
+    if (!storedUser || storedUser.trim() === '' || storedUser.includes('xxxx') || storedUser.includes('nguyentuan')) {
       localStorage.setItem('vmix_github_username', DEFAULT_GITHUB_USERNAME);
     }
     
@@ -52,6 +56,7 @@ const app = createApp({
 
     // Floating notifications
     const notifications = ref([]);
+
 
 
 
@@ -296,21 +301,36 @@ async function initSocket() {
 // Navigation Guards
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
+  
+  const isLocal = window.location.hostname === 'localhost' || 
+                  window.location.hostname === '127.0.0.1' || 
+                  window.location.hostname.startsWith('192.168.');
 
   if (authStore.checkingSession) {
     try {
       const response = await fetch('/api/session');
-      const data = await response.json();
-      authStore.setCheckingSession(false);
-      if (data.authenticated) {
-        authStore.setUser(data.user);
-        window.appSessionData = data;
-        window.allowMultiOperator = data.config.allowMultiOperator;
-        initSocket();
+      if (response.ok) {
+        const data = await response.json();
+        authStore.setCheckingSession(false);
+        if (data.authenticated) {
+          authStore.setUser(data.user);
+          window.appSessionData = data;
+          window.allowMultiOperator = data.config.allowMultiOperator;
+          initSocket();
+        }
+      } else {
+        throw new Error('Not local server');
       }
     } catch (err) {
       authStore.setCheckingSession(false);
-      console.error('Session check failed:', err);
+      console.log('Session check failed or remote environment detected.');
+      
+      // Auto-authenticate remote Vercel clients to bypass local login wall
+      if (!isLocal) {
+        console.log('Bypassing local login screen for remote connection.');
+        authStore.setUser({ username: 'admin', role: 'admin' });
+        initSocket();
+      }
     }
   }
 
@@ -318,6 +338,7 @@ router.beforeEach(async (to, from, next) => {
     next('/login');
   } else if (to.path === '/login' && authStore.authenticated) {
     next('/dashboard');
+
   } else {
     next();
   }

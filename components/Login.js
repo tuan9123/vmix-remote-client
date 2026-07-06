@@ -51,12 +51,13 @@ export default {
         <div class="qr-login-card" style="background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 25px 20px; width: 100%; text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); border: 1px solid var(--border-color);">
           <h3 style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-main); margin-bottom: 12px;">📱 KẾT NỐI NHANH QUA ĐIỆN THOẠI</h3>
           <div style="background: white; padding: 8px; border-radius: 10px; width: 166px; height: 166px; margin: 0 auto 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center;">
-            <img :src="'/api/qrcode?t=' + qrTimestamp" alt="QR Code Link" style="width: 150px; height: 150px; display: block;" />
+            <img :src="qrCodeSrc" alt="QR Code Link" style="width: 150px; height: 150px; display: block;" />
           </div>
           <p style="font-size: 12px; color: var(--text-sub); line-height: 1.5;">
             Quét mã QR bằng điện thoại hoặc máy tính bảng ở cùng mạng LAN để mở nhanh giao diện điều khiển vMix.
           </p>
         </div>
+
 
         <div style="font-size: 11px; color: var(--text-sub); margin-top: 5px; text-align: center; width: 100%;">
           Bản quyền: Nguyễn Tuấn - 08543.08534
@@ -71,6 +72,11 @@ export default {
     const loading = ref(false);
     const error = ref('');
     const qrTimestamp = ref(Date.now());
+
+    // Generate dynamic QR Code pointing to current domain origin
+    const qrData = window.location.origin;
+    const qrCodeSrc = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`;
+
 
     const triggerVibe = () => {
       if (navigator.vibrate) {
@@ -115,7 +121,9 @@ export default {
       loading,
       error,
       qrTimestamp,
+      qrCodeSrc,
       handleSubmit
     };
   }
 };
+
