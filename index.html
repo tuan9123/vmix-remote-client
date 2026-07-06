@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  
+  <title>Tuấn vMix Control Pro</title>
+  
+  <!-- SEO -->
+  <meta name="description" content="Hệ thống điều khiển vMix chuyên nghiệp — bàn trộn, stream deck, âm thanh, nhật ký và cài đặt." />
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#080a0c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="vMix Pro" />
+  <link rel="apple-touch-icon" href="assets/icon-192.png" />
+  <link rel="icon" type="image/png" href="assets/icon-192.png" />
+  
+  <!-- Styling -->
+  <link rel="stylesheet" href="assets/style.css?v=2.0.1" />
+  
+  <!-- Local libraries -->
+  <script src="js/vue.js"></script>
+  <script src="js/vue-router.js"></script>
+  <script src="js/vue-demi.js"></script>
+  <script src="js/pinia.js"></script>
+  <script src="js/socket.io.js"></script>
+</head>
+<body>
+  <div id="app" v-cloak>
+
+    <!-- ── LOADING SCREEN ── -->
+    <div v-if="checkingSession" class="auth-container">
+      <div class="auth-card" style="padding: 50px 30px; display: flex; flex-direction: column; align-items: center; gap: 16px;">
+        <div style="width: 36px; height: 36px; border: 3px solid var(--border-color); border-top-color: var(--active-blue); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <div style="font-size: 14px; font-weight: 500; color: var(--text-sub);">Đang khởi tạo ứng dụng...</div>
+      </div>
+    </div>
+
+    <!-- ── MAIN APP SHELL ── -->
+    <div v-else class="app-shell">
+
+      <!-- ── TOP HEADER (Menu Ngang cho cả Desktop) ── -->
+      <header class="app-header">
+        <!-- Brand -->
+        <div class="logo-container">
+          <img src="assets/icon.ico" alt="Logo" class="logo-img" />
+          <span class="app-title">Tuấn vMix Control Pro</span>
+        </div>
+
+        <div class="header-divider hide-mobile"></div>
+
+        <!-- vMix connection status -->
+        <div class="status-badge hide-mobile">
+          <span class="status-dot" :class="connected ? 'connected' : 'disconnected'"></span>
+          <span>{{ connected ? 'vMix Live' : 'Chưa kết nối' }}</span>
+        </div>
+
+        <div class="header-divider hide-mobile"></div>
+
+        <!-- ── Desktop Horizontal Navigation Bar ── -->
+        <nav v-if="authenticated" class="header-nav-desktop hide-mobile">
+          <router-link to="/dashboard" class="nav-link" :class="{ active: currentRoute === '/dashboard' }">📺 Bàn Trộn</router-link>
+          <router-link to="/streamdeck" class="nav-link" :class="{ active: currentRoute === '/streamdeck' }">🖥️ Stream Deck</router-link>
+          <router-link to="/mixer" class="nav-link" :class="{ active: currentRoute === '/mixer' }">🔊 Âm Thanh</router-link>
+          <router-link to="/logs" class="nav-link" :class="{ active: currentRoute === '/logs' }">📋 Nhật Ký</router-link>
+          <router-link v-if="isAdmin" to="/guide" class="nav-link" :class="{ active: currentRoute === '/guide' }">📖 Hướng Dẫn</router-link>
+          <router-link to="/settings" class="nav-link" :class="{ active: currentRoute === '/settings' }">⚙ Cài Đặt</router-link>
+        </nav>
+
+        <!-- ── Mobile navigation (Visible only on mobile screen) ── -->
+        <nav v-if="authenticated" class="header-nav-mobile show-mobile" style="display: none;">
+          <router-link to="/dashboard" class="nav-link" :class="{ active: currentRoute === '/dashboard' }">📺 Bàn Trộn</router-link>
+          <router-link to="/streamdeck" class="nav-link" :class="{ active: currentRoute === '/streamdeck' }">🖥️ Stream Deck</router-link>
+          <router-link to="/mixer" class="nav-link" :class="{ active: currentRoute === '/mixer' }">🔊 Âm Thanh</router-link>
+          <router-link to="/logs" class="nav-link" :class="{ active: currentRoute === '/logs' }">📋 Nhật Ký</router-link>
+          <router-link v-if="isAdmin" to="/guide" class="nav-link" :class="{ active: currentRoute === '/guide' }">📖 Hướng Dẫn</router-link>
+          <router-link to="/settings" class="nav-link" :class="{ active: currentRoute === '/settings' }">⚙ Cài Đặt</router-link>
+          <a href="javascript:void(0)" class="nav-link" @click="showQrModal = true">📱 Mã QR</a>
+        </nav>
+
+        <div class="header-spacer"></div>
+
+        <!-- Online users count badge -->
+        <div v-if="authenticated" class="status-badge" style="gap: 5px; font-size: 10px;">
+          <span>👥</span>
+          <span>{{ onlineCount }} online</span>
+        </div>
+      </header>
+
+      <!-- ── BODY AREA ── -->
+      <div class="app-body">
+        <!-- Main content expands fully without sidebar -->
+        <main class="main-content">
+          <div class="view-wrapper">
+            <router-view></router-view>
+          </div>
+        </main>
+      </div>
+
+      <!-- ── FLOATING QR CODE (Desktop only, toggleable) ── -->
+      <div v-if="authenticated && showQrFloat" class="floating-qr hide-mobile" id="floating-qr">
+        <button class="toast-close" @click="toggleQrFloat" style="position: absolute; top: 4px; right: 6px; font-size: 14px; line-height: 1; color: var(--text-sub); cursor: pointer;">&times;</button>
+        <img :src="qrCodeUrl" alt="QR Control" style="margin-top: 8px;" />
+        <span class="floating-qr-label">Quét QR Điều Khiển</span>
+      </div>
+
+      <!-- ── MOBILE QR CODE MODAL ── -->
+      <div class="modal-overlay" v-if="showQrModal" @click.self="showQrModal = false">
+        <div class="modal-content" style="max-width: 300px; text-align: center; padding: 20px;">
+          <div class="modal-header" style="margin-bottom: 12px;">
+            <h3 style="font-size: 15px;">📱 Mã QR Điều Khiển</h3>
+            <button class="modal-close" @click="showQrModal = false">&times;</button>
+          </div>
+          <img :src="qrCodeUrl" style="width: 180px; height: 180px; margin: 10px auto; display: block; border-radius: 6px; background: #fff;" />
+          <p style="font-size: 11px; color: var(--text-sub); line-height: 1.4;">Quét mã này bằng camera điện thoại để truy cập giao diện điều khiển vMix.</p>
+        </div>
+      </div>
+
+
+      <!-- ── TOAST NOTIFICATIONS ── -->
+      <div class="notifications-container">
+        <div
+          v-for="(n, idx) in notifications"
+          :key="n.id"
+          class="toast-alert"
+          :class="n.type"
+        >
+          <div class="toast-header">
+            <strong>🔔 {{ n.title }}</strong>
+            <button class="toast-close" @click="removeNotification(idx)">&times;</button>
+          </div>
+          <div class="toast-body">{{ n.message }}</div>
+        </div>
+      </div>
+
+
+    </div><!-- /.app-shell -->
+  </div><!-- /#app -->
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
