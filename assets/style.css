@@ -1489,3 +1489,9 @@ input[type=range][style*="writing-mode"] {
   }
 }
 
+/* Force QR visibility on Electron PC app regardless of size */
+body.is-electron .floating-qr {
+  display: flex !important;
+}
+
+

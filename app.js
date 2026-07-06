@@ -14,11 +14,17 @@ const { createApp, ref, computed, onMounted, watch } = Vue;
 
 const app = createApp({
   setup() {
+    // Detect Electron environment
+    const isElectron = window.navigator.userAgent.indexOf('Electron') > -1;
+    if (isElectron) {
+      document.body.classList.add('is-electron');
+    }
+
     // ── CẤU HÌNH GITHUB PRO MẶC ĐỊNH (Điền thông tin của bạn vào đây trước khi build) ──
     const DEFAULT_GITHUB_TOKEN = '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';
-    const DEFAULT_GIST_ID = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+    const DEFAULT_GIST_ID = '6d4e1a1a34c9c3182fb1aace5de7bf3c';
     const DEFAULT_VERCEL_DOMAIN = 'https://tuan-vmix-client.vercel.app';
-    const DEFAULT_GITHUB_USERNAME = 'nguyentuan';
+    const DEFAULT_GITHUB_USERNAME = 'tuan9123';
 
     // Tự động nạp cấu hình nếu chưa được lưu trữ
     if (!localStorage.getItem('vmix_github_token')) {
@@ -33,6 +39,12 @@ const app = createApp({
     if (!localStorage.getItem('vmix_github_username')) {
       localStorage.setItem('vmix_github_username', DEFAULT_GITHUB_USERNAME);
     }
+    
+    // Tự động sinh tên định danh máy ngẫu nhiên không trùng lặp (ví dụ: vmix-4872)
+    if (!localStorage.getItem('vmix_machine_name') || localStorage.getItem('vmix_machine_name') === 'may1') {
+      const randomMachineName = 'vmix-' + Math.floor(1000 + Math.random() * 9000);
+      localStorage.setItem('vmix_machine_name', randomMachineName);
+    }
 
     const authStore = useAuthStore();
     const vmixStore = useVmixStore();
@@ -40,6 +52,7 @@ const app = createApp({
 
     // Floating notifications
     const notifications = ref([]);
+
 
 
     // Sidebar collapse state (persisted)
@@ -71,15 +84,17 @@ const app = createApp({
       const gistId = localStorage.getItem('vmix_github_gist_id') || '';
       const token = localStorage.getItem('vmix_github_token') || '';
       const customDomain = localStorage.getItem('vmix_custom_deploy_domain') || '';
+      const machineName = localStorage.getItem('vmix_machine_name') || 'may1';
       if (gistId && token) {
         if (customDomain) {
-          return `/api/qrcode?gist=${encodeURIComponent(gistId)}&domain=${encodeURIComponent(customDomain)}&t=${qrTimestamp.value}`;
+          return `/api/qrcode?gist=${encodeURIComponent(gistId)}&domain=${encodeURIComponent(customDomain)}&may=${encodeURIComponent(machineName)}&t=${qrTimestamp.value}`;
         }
         const githubUser = localStorage.getItem('vmix_github_username') || 'username';
-        return `/api/qrcode?gist=${encodeURIComponent(gistId)}&user=${encodeURIComponent(githubUser)}&t=${qrTimestamp.value}`;
+        return `/api/qrcode?gist=${encodeURIComponent(gistId)}&user=${encodeURIComponent(githubUser)}&may=${encodeURIComponent(machineName)}&t=${qrTimestamp.value}`;
       }
       return `/api/qrcode?t=${qrTimestamp.value}`;
     });
+
 
 
 
@@ -167,18 +182,37 @@ async function initSocket() {
 
   let socketUrl = undefined;
   
-  // If running outside LAN and Gist ID is available, fetch tunnel address from GitHub Gist
   const gistId = getQueryParam('gist') || localStorage.getItem('vmix_github_gist_id');
+  const machineName = getQueryParam('may') || localStorage.getItem('vmix_machine_name') || 'may1';
+
   if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.hostname.startsWith('192.168.') && gistId) {
     try {
-      console.log(`[GitHub Connect] Fetching tunnel coordinate from Gist ${gistId}...`);
+      console.log(`[GitHub Connect] Fetching tunnel coordinate for ${machineName} from Gist ${gistId}...`);
       const response = await fetch(`https://api.github.com/gists/${gistId}`);
       if (response.ok) {
         const gistData = await response.json();
-        const tunnelConfig = JSON.parse(gistData.files['vmix_tunnel.json']?.content || '{}');
-        if (tunnelConfig.url) {
-          socketUrl = tunnelConfig.url;
-          console.log(`[GitHub Connect] Routing Socket.io connection to: ${socketUrl}`);
+        
+        // 1. Try reading the multi-machine tunnels list
+        const tunnelsConfigObj = gistData.files['vmix_tunnels.json'];
+        if (tunnelsConfigObj && tunnelsConfigObj.content) {
+          const tunnelsConfig = JSON.parse(tunnelsConfigObj.content);
+          const targetConfig = tunnelsConfig[machineName] || {};
+          if (targetConfig.url) {
+            socketUrl = targetConfig.url;
+            console.log(`[GitHub Connect] Routing Socket.io to ${machineName}: ${socketUrl}`);
+          }
+        }
+        
+        // 2. Fallback to old format if not found
+        if (!socketUrl) {
+          const legacyConfigObj = gistData.files['vmix_tunnel.json'];
+          if (legacyConfigObj && legacyConfigObj.content) {
+            const legacyConfig = JSON.parse(legacyConfigObj.content);
+            if (legacyConfig.url) {
+              socketUrl = legacyConfig.url;
+              console.log(`[GitHub Connect Fallback] Routing Socket.io to: ${socketUrl}`);
+            }
+          }
         }
       }
     } catch (err) {
@@ -187,6 +221,7 @@ async function initSocket() {
   }
   
   window.appSocket = io(socketUrl);
+
 
 
   window.appSocket.on('connect', () => {
@@ -219,11 +254,13 @@ async function initSocket() {
     window.lastTunnelUrl = url;
     const token = localStorage.getItem('vmix_github_token');
     const gistId = localStorage.getItem('vmix_github_gist_id');
+    const machineName = localStorage.getItem('vmix_machine_name') || 'may1';
     if (token && gistId && url) {
-      console.log(`[GitHub Tunnel Sync] Triggering Gist sync for tunnel: ${url}`);
-      window.appSocket.emit('sync-gist-tunnel', { token, gistId, url });
+      console.log(`[GitHub Tunnel Sync] Triggering Gist sync for machine ${machineName} with tunnel: ${url}`);
+      window.appSocket.emit('sync-gist-tunnel', { token, gistId, url, machineName });
     }
   });
+
 
 
   window.appSocket.on('notification', (notif) => {

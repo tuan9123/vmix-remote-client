@@ -79,8 +79,8 @@ export default {
           </div>
         </div>
 
-        <!-- PRO Features settings (GitHub + Audio Matrix) -->
-        <div style="background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 20px;">
+        <!-- PRO Features settings (GitHub + Audio Matrix) - HIDDEN BY DEFAULT -->
+        <div style="background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; display: none;">
           <h3 style="font-size: 14px; font-weight: 700; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 15px; color: var(--active-blue);">🌐 Điều Khiển Khác Mạng Qua GitHub (PRO)</h3>
           
           <div class="form-group">
@@ -98,16 +98,23 @@ export default {
             <input type="text" class="form-input" v-model="customDeployDomain" placeholder="Ví dụ: https://tuan-vmix-client.vercel.app" />
           </div>
 
+          <div class="form-group">
+            <label>Tên định danh máy này (ví dụ: may1, may2, may3)</label>
+            <input type="text" class="form-input" v-model="machineName" placeholder="Mặc định: may1" />
+          </div>
+
           <div style="font-size: 11px; color: var(--text-sub); line-height: 1.4; margin-bottom: 15px;">
-            * Token, Gist ID và tên miền Vercel được lưu trữ bảo mật trực tiếp trên trình duyệt của bạn (localStorage).
+            * Token, Gist ID, tên miền Vercel và tên máy được lưu an toàn trực tiếp trên thiết bị (localStorage).
             Hãy xem file hướng dẫn <strong>vercel_deployment_guide.md</strong> để biết cách deploy Vercel từ GitHub Private.
           </div>
+
 
           <button class="btn btn-primary" @click="saveGithubSettings" style="height: 36px; font-size: 12px; font-weight: 700;">
             💾 Lưu Thiết Lập GitHub
           </button>
 
         </div>
+
 
         <div style="background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 20px;">
           <h3 style="font-size: 14px; font-weight: 700; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 15px; color: var(--active-blue);">🎛️ Tính Năng Tự Động PRO</h3>
@@ -215,12 +222,14 @@ export default {
     const githubToken = ref(localStorage.getItem('vmix_github_token') || '');
     const githubGistId = ref(localStorage.getItem('vmix_github_gist_id') || '');
     const customDeployDomain = ref(localStorage.getItem('vmix_custom_deploy_domain') || '');
+    const machineName = ref(localStorage.getItem('vmix_machine_name') || 'may1');
     
     const saveGithubSettings = () => {
       if (navigator.vibrate) navigator.vibrate(30);
       localStorage.setItem('vmix_github_token', githubToken.value);
       localStorage.setItem('vmix_github_gist_id', githubGistId.value);
       localStorage.setItem('vmix_custom_deploy_domain', customDeployDomain.value);
+      localStorage.setItem('vmix_machine_name', machineName.value);
       
       // Extract github username or Vercel subdomain prefix for QR Code URL
       let extractedUser = 'username';
@@ -241,11 +250,13 @@ export default {
         window.appSocket.emit('sync-gist-tunnel', {
           token: githubToken.value,
           gistId: githubGistId.value,
-          url: window.lastTunnelUrl
+          url: window.lastTunnelUrl,
+          machineName: machineName.value
         });
       }
       alert('Đã lưu thiết lập GitHub!');
     };
+
 
 
     // Smart Audio Matrix config
@@ -478,9 +489,11 @@ export default {
       githubToken,
       githubGistId,
       customDeployDomain,
+      machineName,
       saveGithubSettings,
       smartAudioMatrix
     };
+
 
 
   }
